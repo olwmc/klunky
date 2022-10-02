@@ -38,23 +38,23 @@ mod tests {
     use std::{thread, time};
     
     pub struct App {
-        magic_number: i32,
+        words: Vec<String>,
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_basic_app() {
-        let app = App {magic_number: 10 };
+        let app = App {words: vec![] };
         let proxy_original = Arc::new(Mutex::new(app));
 
         klunky_spawn(Arc::clone(&proxy_original), |req, proxy| {
             let mut pp = proxy.lock().unwrap();
-            pp.magic_number += 1;
+            pp.words.push(req.action);
             serde_json::to_string(&KlunkyResponse { response: vec![format!("action = {}, magic_number = {}", req.action, pp.magic_number)], error: vec![]}).unwrap()
         });
 
         let ten_millis = time::Duration::from_secs(10);
         thread::sleep(ten_millis);
 
-        println!("mn = {}", proxy_original.clone().lock().unwrap().magic_number);
+        println!("words:{:#?}", proxy_original.clone().lock().unwrap().words);
     }
 }
