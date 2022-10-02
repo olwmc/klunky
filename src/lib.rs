@@ -41,19 +41,16 @@ mod tests {
         magic_number: i32,
     }
 
-    pub fn act_on_request(req: KlunkyRequest, proxy: Prox<App>) -> String {
-        let mut pp = proxy.lock().unwrap();
-        pp.magic_number += 1;
-        serde_json::to_string(
-            &KlunkyResponse { response: vec![format!("action = {}, magic_number = {}", req.action, pp.magic_number)], error: vec![]}).unwrap()
-    }
-
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_basic_app() {
         let app = App {magic_number: 10 };
         let proxy_original = Arc::new(Mutex::new(app));
 
-        klunky_spawn(Arc::clone(&proxy_original), act_on_request);
+        klunky_spawn(Arc::clone(&proxy_original), |req, proxy| {
+            let mut pp = proxy.lock().unwrap();
+            pp.magic_number += 1;
+            serde_json::to_string(&KlunkyResponse { response: vec![format!("action = {}, magic_number = {}", req.action, pp.magic_number)], error: vec![]}).unwrap()
+        });
 
         let ten_millis = time::Duration::from_secs(10);
         thread::sleep(ten_millis);
