@@ -44,17 +44,17 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_basic_app() {
         let app = App {words: vec![] };
-        let proxy_original = Arc::new(Mutex::new(app));
+        let proxy: Prox<App> = Arc::new(Mutex::new(app));
 
-        klunky_spawn(Arc::clone(&proxy_original), |req, proxy| {
-            let mut pp = proxy.lock().unwrap();
-            pp.words.push(req.action);
-            serde_json::to_string(&KlunkyResponse { response: vec![format!("action = {}, magic_number = {}", req.action, pp.magic_number)], error: vec![]}).unwrap()
+        klunky_spawn(proxy.clone(), |req, p| {
+            let mut pp = p.lock().unwrap();
+            pp.words.push(req.action.clone());
+            serde_json::to_string(&KlunkyResponse { response: vec![format!("added word: {}", req.action)], error: vec![]}).unwrap()
         });
 
         let ten_millis = time::Duration::from_secs(10);
         thread::sleep(ten_millis);
 
-        println!("words:{:#?}", proxy_original.clone().lock().unwrap().words);
+        println!("words:{:#?}", proxy.clone().lock().unwrap().words);
     }
 }
