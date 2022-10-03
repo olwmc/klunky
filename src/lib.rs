@@ -32,11 +32,18 @@ pub fn klunky_spawn<T: Send + 'static>(proxy: Prox<T>, f: fn(KlunkyRequest, Prox
     });
 }
 
+impl From<KlunkyResponse> for String {
+    fn from(resp: KlunkyResponse) -> Self {
+        serde_json::to_string(&resp).unwrap()
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{thread, time};
-    
+    use reqwest;
+
     pub struct App {
         words: Vec<String>,
     }
@@ -44,17 +51,25 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_basic_app() {
         let app = App {words: vec![] };
-        let proxy: Prox<App> = Arc::new(Mutex::new(app));
+        let proxy_truth = Arc::new(Mutex::new(app));
+        let proxy: Prox<App> = proxy_truth.clone();
 
         klunky_spawn(proxy.clone(), |req, p| {
             let mut pp = p.lock().unwrap();
             pp.words.push(req.action.clone());
-            serde_json::to_string(&KlunkyResponse { response: vec![format!("added word: {}", req.action)], error: vec![]}).unwrap()
+
+            KlunkyResponse { response: vec![format!("added word: {}", req.action)], error: vec![]}.into()
         });
 
-        let ten_millis = time::Duration::from_secs(10);
-        thread::sleep(ten_millis);
+        for i in 0..5 {
+            reqwest::Client::new().post("http://127.0.0.1:55865")
+                .body(format!("{{\"action\": \"test{}\", \"params\": []}}", i))
+                .send()
+                .await.unwrap();
+        }
 
-        println!("words:{:#?}", proxy.clone().lock().unwrap().words);
+        let proxy = proxy_truth.clone();
+        let pp = proxy.lock().unwrap();
+        assert_eq!(pp.words, vec!["test0","test1","test2","test3","test4"])
     }
 }
