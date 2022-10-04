@@ -1,6 +1,7 @@
-use std::io::Write;
 use std::net::{TcpListener, TcpStream, SocketAddr};
+use std::io::Write;
 use std::sync::{Arc, Mutex};
+use std::thread;
 
 struct KlunkyRequest;
 struct KlunkyConnection;
@@ -9,55 +10,55 @@ struct KlunkyConnection;
 struct KlunkyServer {
     // need this to work between threads
     conns: Arc<Mutex<Vec<(TcpStream, SocketAddr)>>>,
-    listener: TcpListener
+    listener: TcpListener,
 }
 
 impl KlunkyServer {
     // Spawn => Add incoming connections to queue, lock
     // connections: returns an iterator
 
-    fn new(port: u32) -> Self {
+    pub fn new(port: u32) -> Self {
         let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
         listener.set_nonblocking(true).expect("Cannot set non-blocking");
 
         Self { conns: Default::default(), listener }
     }
 
-    fn spawn(&mut self) {
+    pub fn spawn(&mut self) {
         let copy = self.conns.clone();
+        let listener = self.listener.try_clone().unwrap();
+
         thread::spawn(move || {
-            
+            // Accept connections
+            loop {
+                match listener.accept() {
+                    Ok( (_socket, _addr) ) => copy.clone().lock().unwrap().push( (_socket, _addr) ),
+                    Err(_) => {}
+                }
+            }
         });
     }
-    //fn connections(&mut self) <== this also clears out the connections
-}
-use std::{thread, time};
-
-fn main() {
-    let mut kc = KlunkyServer::new(6666);
-    kc.spawn();
-    
-    // loop {
-    //     // Work we're doing in the middle here
-    //     thread::sleep(time::Duration::from_millis(1000));
-
-    //     // ---
-    //     // ---
-    //     // ---
-    //     // ---
-        
-    //     // Accept connections
-    //     match kc.listener.accept() {
-    //         Ok( (_socket, _addr) ) => kc.conns.push( (_socket, _addr) ),
-    //         Err(_) => {}
-    //     }
-
-    //     // Process connections
-    //     for conn in &mut kc.conns {
-    //         let buf = "abcde".as_bytes();
-    //         conn.0.write(&buf);
-    //     }
-
-    //     kc.conns.clear();
+    // pub fn connections(&mut self) -> impl Iterator<Item=&TcpStream> {
     // }
+    //fn clear_connections(&mut self)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{thread, time};
+
+    #[test]
+    fn test_1() {
+        let mut kc = KlunkyServer::new(6666);
+        kc.spawn();
+
+        thread::sleep(time::Duration::from_millis(3000));
+
+        for conn in kc.connections() {
+            let buf = "abcde".as_bytes();
+            conn.write(&buf);
+        }
+    }
 }
