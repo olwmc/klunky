@@ -55,7 +55,7 @@ mod tests {
         let mut kc = KlunkyServer::new(6666);
         kc.spawn();
 
-        for i in range(0,5) {
+        for _ in 0..5 {
             thread::sleep(time::Duration::from_millis(3000));
 
             let connclone = kc.conns.clone();
