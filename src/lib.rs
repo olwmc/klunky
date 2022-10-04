@@ -1,5 +1,4 @@
-use std::net::{TcpListener, TcpStream, SocketAddr};
-use std::io::Write;
+use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -7,7 +6,8 @@ struct KlunkyRequest;
 struct KlunkyConnection;
 
 /* Need to abstract and wrap stuff in a KlunkyRequest(inside tcp stream) and a KlunkyConnection(tcpstream itself) */
-struct KlunkyServer {
+/* I may need to impl iterator for this to preserve scope and stuff */
+pub struct KlunkyServer {
     // need this to work between threads
     conns: Arc<Mutex<Vec<TcpStream>>>,
     listener: TcpListener,
@@ -40,10 +40,9 @@ impl KlunkyServer {
             }
         });
     }
-    // pub fn connections(&mut self) -> impl Iterator<Item=&TcpStream> {
-    //     self.conns.clone().clone().lock().unwrap().iter().map(|(s, _)|)
-    // }
-    //fn clear_connections(&mut self)
+    pub fn connections(&mut self) -> Arc<Mutex<Vec<TcpStream>>> {
+        self.conns.clone()
+    }
 }
 
 
@@ -51,6 +50,7 @@ impl KlunkyServer {
 mod tests {
     use super::*;
     use std::{thread, time, net::Shutdown};
+    use std::io::Write;
 
     #[test]
     fn test_1() {
@@ -61,7 +61,10 @@ mod tests {
             // Do some work
             thread::sleep(time::Duration::from_millis(500));
 
-            let connclone = kc.conns.clone();
+            // Might have to do some funky stuff to make this easy
+
+            // Definately need to wrap everything in a KlunkyConnection that has a request() and send(...) method
+            let connclone = kc.connections();
             let mut clone = connclone.lock().unwrap();
 
             // Proces the connections
