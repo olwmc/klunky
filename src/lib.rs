@@ -1,6 +1,7 @@
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream, Shutdown};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::io::Write;
 
 struct KlunkyRequest;
 struct KlunkyConnection;
@@ -9,6 +10,7 @@ struct KlunkyConnection;
 /* I may need to impl iterator for this to preserve scope and stuff */
 pub struct KlunkyServer {
     // need this to work between threads
+    
     conns: Arc<Mutex<Vec<TcpStream>>>,
     listener: TcpListener,
 }
@@ -40,8 +42,23 @@ impl KlunkyServer {
             }
         });
     }
-    pub fn connections(&mut self) -> Arc<Mutex<Vec<TcpStream>>> {
-        self.conns.clone()
+
+    /* 
+        does this even work? i feel like we would want more dynamic behavior here. This is just as limiting
+        by putting it into a closure here
+    */
+    pub fn handle_connections(&mut self, f: fn(&TcpStream)) {
+        // Definately need to wrap everything in a KlunkyConnection that has a request() and send(...) method
+        let connclone = self.conns.clone();
+        let mut clone = connclone.lock().unwrap();
+        
+        // Proces the connections
+        for conn in clone.iter() {
+            f(conn);
+            conn.shutdown(Shutdown::Both).unwrap();
+        }
+        
+        (*clone).clear();
     }
 }
 
@@ -49,8 +66,7 @@ impl KlunkyServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{thread, time, net::Shutdown};
-    use std::io::Write;
+    use std::{thread, time};
 
     #[test]
     fn test_1() {
@@ -62,19 +78,10 @@ mod tests {
             thread::sleep(time::Duration::from_millis(500));
 
             // Might have to do some funky stuff to make this easy
-
-            // Definately need to wrap everything in a KlunkyConnection that has a request() and send(...) method
-            let connclone = kc.connections();
-            let mut clone = connclone.lock().unwrap();
-
-            // Proces the connections
-            for mut conn in clone.iter() {
+            kc.handle_connections(|mut stream| {
                 let buf = "HTTP/1.1 200 OK\r\n".as_bytes();
-                conn.write(&buf);
-                conn.shutdown(Shutdown::Both);
-            }
-
-            (*clone).clear();
+                stream.write(&buf).unwrap();
+            })
         }
     }
 }
