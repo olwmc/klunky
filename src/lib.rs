@@ -32,7 +32,7 @@ impl KlunkyServer {
             // Accept connections
             loop {
                 match listener.accept() {
-                    Ok( (_socket, _addr) ) => copy.clone().lock().unwrap().push( _socket ),
+                    Ok( (socket, _) ) => copy.clone().lock().unwrap().push( socket ),
                     Err(_) => {}
                 }
             }
