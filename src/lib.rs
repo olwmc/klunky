@@ -6,7 +6,7 @@ use std::thread;
 struct KlunkyRequest;
 struct KlunkyConnection;
 
-/* Need to abstract away this shit and wrap stuff in a KlunkyRequest(inside tcp stream) and a KlunkyConnection(tcpstream itself) */
+/* Need to abstract and wrap stuff in a KlunkyRequest(inside tcp stream) and a KlunkyConnection(tcpstream itself) */
 struct KlunkyServer {
     // need this to work between threads
     conns: Arc<Mutex<Vec<TcpStream>>>,
