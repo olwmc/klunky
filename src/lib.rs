@@ -39,6 +39,7 @@ impl KlunkyServer {
         });
     }
     // pub fn connections(&mut self) -> impl Iterator<Item=&TcpStream> {
+    //     self.conns.clone().clone().lock().unwrap().iter().map(|(s, _)|)
     // }
     //fn clear_connections(&mut self)
 }
@@ -47,18 +48,27 @@ impl KlunkyServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{thread, time};
+    use std::{thread, time, net::Shutdown};
 
     #[test]
     fn test_1() {
         let mut kc = KlunkyServer::new(6666);
         kc.spawn();
 
-        thread::sleep(time::Duration::from_millis(3000));
+        for i in range(0,5) {
+            thread::sleep(time::Duration::from_millis(3000));
 
-        for conn in kc.connections() {
-            let buf = "abcde".as_bytes();
-            conn.write(&buf);
+            let connclone = kc.conns.clone();
+            let clone = connclone.lock().unwrap();
+            let connections = clone.iter().map(|(s,_)| {s});
+            for mut conn in connections {
+                let buf = "abcde".as_bytes();
+                conn.write(&buf);
+                conn.shutdown(Shutdown::Both);
+            }
+
+            let connclone = kc.conns.clone();
+            *connclone.lock().unwrap() = vec![];
         }
     }
 }
