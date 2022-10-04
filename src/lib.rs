@@ -3,8 +3,18 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::io::Write;
 
-struct KlunkyRequest;
-struct KlunkyConnection;
+struct KlunkyResponse {
+    result: Vec<String>,
+    error: Vec<String>
+
+}
+struct KlunkyRequest {
+    action: String,
+    params: Vec<String>
+}
+struct KlunkyConnection {
+    connection: TcpStream
+}
 
 /* Need to abstract and wrap stuff in a KlunkyRequest(inside tcp stream) and a KlunkyConnection(tcpstream itself) */
 /* I may need to impl iterator for this to preserve scope and stuff */
@@ -44,9 +54,14 @@ impl KlunkyServer {
     }
 
     /* 
-        does this even work? i feel like we would want more dynamic behavior here. This is just as limiting
+        Does this even work? i feel like we would want more dynamic behavior here. This is just as limiting
         by putting it into a closure here
     */
+    // Might have to do some funky stuff to make this easy
+    // kc.handle_connections(|mut stream| {
+    //     let buf = "HTTP/1.1 200 OK\r\n".as_bytes();
+    //     stream.write(&buf).unwrap();
+    // });
     pub fn handle_connections(&mut self, f: fn(&TcpStream)) {
         // Definately need to wrap everything in a KlunkyConnection that has a request() and send(...) method
         let connclone = self.conns.clone();
@@ -59,6 +74,21 @@ impl KlunkyServer {
         }
         
         (*clone).clear();
+    }
+
+    pub fn connections(&mut self) -> Vec<TcpStream>{
+        let mut v = vec![];
+        let connclone = self.conns.clone();
+        let mut clone = connclone.lock().unwrap();
+        let content = &*clone;
+
+        for c in content {
+            v.push(c.try_clone().unwrap())
+        }
+
+        (*clone).clear();
+        
+        return v
     }
 }
 
@@ -74,14 +104,14 @@ mod tests {
         kc.spawn();
 
         loop {
-            // Do some work
             thread::sleep(time::Duration::from_millis(500));
 
-            // Might have to do some funky stuff to make this easy
-            kc.handle_connections(|mut stream| {
+            for mut c in kc.connections() {
                 let buf = "HTTP/1.1 200 OK\r\n".as_bytes();
-                stream.write(&buf).unwrap();
-            })
+                c.write(&buf).unwrap();
+
+                c.shutdown(Shutdown::Both).unwrap();
+            }
         }
     }
 }
