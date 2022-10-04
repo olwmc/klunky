@@ -31,9 +31,10 @@ impl KlunkyServer {
         thread::spawn(move || {
             // Accept connections
             loop {
-                match listener.accept() {
-                    Ok( (socket, _) ) => copy.clone().lock().unwrap().push( socket ),
-                    Err(_) => {}
+                // can this deadlock? I don't think so because they're in different scopes and
+                // one would just wait for the other as either is guaranteed to get unlocked
+                if let Ok((socket, _)) = listener.accept() {
+                    copy.clone().lock().unwrap().push( socket )
                 }
             }
         });
