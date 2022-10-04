@@ -28,6 +28,7 @@ impl KlunkyServer {
         let copy = self.conns.clone();
         let listener = self.listener.try_clone().unwrap();
 
+        // Might want to use a tokio task here as they're much lighter weight
         thread::spawn(move || {
             // Accept connections
             loop {
@@ -56,19 +57,21 @@ mod tests {
         let mut kc = KlunkyServer::new(6666);
         kc.spawn();
 
-        for _ in 0..5 {
-            thread::sleep(time::Duration::from_millis(3000));
+        loop {
+            // Do some work
+            thread::sleep(time::Duration::from_millis(500));
 
             let connclone = kc.conns.clone();
-            let clone = connclone.lock().unwrap();
+            let mut clone = connclone.lock().unwrap();
+
+            // Proces the connections
             for mut conn in clone.iter() {
-                let buf = "abcde".as_bytes();
+                let buf = "HTTP/1.1 200 OK\r\n".as_bytes();
                 conn.write(&buf);
                 conn.shutdown(Shutdown::Both);
             }
 
-            let connclone = kc.conns.clone();
-            *connclone.lock().unwrap() = vec![];
+            (*clone).clear();
         }
     }
 }
