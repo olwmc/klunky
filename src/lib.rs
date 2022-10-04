@@ -9,7 +9,7 @@ struct KlunkyConnection;
 /* Need to abstract away this shit and wrap stuff in a KlunkyRequest(inside tcp stream) and a KlunkyConnection(tcpstream itself) */
 struct KlunkyServer {
     // need this to work between threads
-    conns: Arc<Mutex<Vec<(TcpStream, SocketAddr)>>>,
+    conns: Arc<Mutex<Vec<TcpStream>>>,
     listener: TcpListener,
 }
 
@@ -32,7 +32,7 @@ impl KlunkyServer {
             // Accept connections
             loop {
                 match listener.accept() {
-                    Ok( (_socket, _addr) ) => copy.clone().lock().unwrap().push( (_socket, _addr) ),
+                    Ok( (_socket, _addr) ) => copy.clone().lock().unwrap().push( _socket ),
                     Err(_) => {}
                 }
             }
@@ -60,8 +60,7 @@ mod tests {
 
             let connclone = kc.conns.clone();
             let clone = connclone.lock().unwrap();
-            let connections = clone.iter().map(|(s,_)| {s});
-            for mut conn in connections {
+            for mut conn in clone.iter() {
                 let buf = "abcde".as_bytes();
                 conn.write(&buf);
                 conn.shutdown(Shutdown::Both);
