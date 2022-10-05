@@ -136,6 +136,9 @@ mod tests {
     }
     #[test]
     fn test_1() {
+
+        // curl localhost:6666 -d '{"action": "dog", "params": []}'
+        // => {"result": ["woof"], "error": []}
         let mut kc = KlunkyServer::new(6666);
         kc.spawn(100);
 
