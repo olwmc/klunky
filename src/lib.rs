@@ -140,7 +140,7 @@ mod tests {
                 let make_request = c.request();
                 if let Ok(req) = make_request {
                     println!("action: {}, params:{:?}", req.action, req.params);
-                    c.respond(KlunkyResponse{result:vec![], error: vec![]}).unwrap();
+                    c.respond(KlunkyResponse{result:vec![format!("You sent: {}", req.action)], error: vec![]}).unwrap();
 
                 } else {
                     c.respond(KlunkyResponse{result:vec![], error: vec![format!("{:?}", make_request)]}).unwrap();
