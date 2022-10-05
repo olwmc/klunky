@@ -1,13 +1,14 @@
 use std::net::{TcpListener, TcpStream, Shutdown};
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::io::Write;
+use std::io::{Write, Read};
+use std::{thread, time};
 
+#[derive(Debug)]
 pub struct KlunkyResponse {
     pub result: Vec<String>,
     pub error: Vec<String>
-
 }
+
 #[derive(Debug)]
 pub struct KlunkyRequest {
     pub action: String,
@@ -18,13 +19,23 @@ pub struct KlunkyConnection {
     pub connection: TcpStream,
 }
 
+#[derive(Debug)]
+pub enum KlunkyError {
+    MalformedInput,
+}
+
 impl KlunkyConnection {
-    fn request(&self) -> KlunkyRequest {
-        KlunkyRequest { action: "Abcde".to_string(), params: vec![] }
+    pub fn request(&mut self) -> Result<KlunkyRequest, KlunkyError> {
+        //let mut content_length = -1;
+        //println!("buf = {buf:?}");
+
+        Ok(KlunkyRequest { action: "Abcde".to_string(), params: vec![] })
     }
 
-    fn send_response(&mut self) -> Result<usize, std::io::Error> {
-        self.connection.write("HTTP/1.1 200 OK\r\n".as_bytes())
+    pub fn respond(&mut self, response: KlunkyResponse) -> Result<usize, std::io::Error> {
+        let header = "HTTP/1.1 200 OK";
+        let message = format!("{:?}", response);
+        self.connection.write(format!("{header}\r\nContent-Length:{}\r\n\r\n{message}", message.len()).as_bytes())
     }
 }
 
@@ -34,8 +45,6 @@ impl Drop for KlunkyConnection {
     }
 }
 
-/* Need to abstract and wrap stuff in a KlunkyRequest(inside tcp stream) and a KlunkyConnection(tcpstream itself) */
-/* I may need to impl iterator for this to preserve scope and stuff */
 pub struct KlunkyServer {    
     conns: Arc<Mutex<Vec<TcpStream>>>,
     listener: TcpListener,
@@ -49,7 +58,7 @@ impl KlunkyServer {
         Self { conns: Default::default(), listener }
     }
 
-    pub fn spawn(&mut self) {
+    pub fn spawn(&mut self, delay: u64) {
         let copy = self.conns.clone();
         let listener = self.listener.try_clone().unwrap();
 
@@ -62,6 +71,7 @@ impl KlunkyServer {
                 if let Ok((socket, _)) = listener.accept() {
                     copy.clone().lock().unwrap().push( socket )
                 }
+                thread::sleep(time::Duration::from_millis(delay));
             }
         });
     }
@@ -86,12 +96,11 @@ impl KlunkyServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{thread, time};
 
     #[test]
     fn test_1() {
         let mut kc = KlunkyServer::new(6666);
-        kc.spawn();
+        kc.spawn(100);
 
         loop {
             // Do some program work
@@ -99,8 +108,8 @@ mod tests {
             let connections = kc.consume_connections().into_iter();
 
             for mut c in connections {
-                println!("Request body = {:?}", c.request());
-                c.send_response().ok();
+                println!("Request body = {:?}", c.request().unwrap());
+                c.respond(KlunkyResponse{result:vec!["Ok".to_string()], error: vec![]}).ok();
             }
         }
     }
