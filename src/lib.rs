@@ -31,23 +31,23 @@ impl KlunkyConnection {
     pub fn request(&mut self) -> Result<KlunkyRequest, Box<dyn error::Error>> {
         let mut reader = BufReader::new(self.connection.try_clone()?);
         let mut name = String::new();
-        loop {
-        let r = reader.read_line(&mut name)?;
-            if r < 3 { //detect empty line
-                break;
-            }
-        }
         let mut size = 0;
-        let linesplit = name.split("\n");
-        for l in linesplit {
-            if l.starts_with("Content-Length") {
-                    let sizeplit = l.split(":");
-                    for s in sizeplit {
-                        if !(s.starts_with("Content-Length")) {
-                            size = s.trim().parse::<usize>()?; //Get Content-Length
-                    }
+        loop {
+            let r = reader.read_line(&mut name)?;
+                if r < 3 { //detect empty line
+                    break;
                 }
             }
+            let linesplit = name.split("\n");
+            for l in linesplit {
+                if l.starts_with("Content-Length") {
+                        let sizeplit = l.split(":");
+                        for s in sizeplit {
+                            if !(s.starts_with("Content-Length")) {
+                                size = s.trim().parse::<usize>()?; //Get Content-Length
+                        }
+                    }
+                }
         }
         let mut buffer = vec![0; size]; //New Vector with size of Content   
         reader.read_exact(&mut buffer)?; //Get the Body Content.        
@@ -126,6 +126,14 @@ impl KlunkyServer {
 mod tests {
     use super::*;
 
+    fn handle_request(req: &KlunkyRequest) -> KlunkyResponse {
+        let body = match (req.action.as_str(), &req.params) {
+            ("dog", _) => "woof",
+            (_,_) => "nada!",
+        };
+
+        KlunkyResponse { result: vec![body.to_owned()], error: vec![] }
+    }
     #[test]
     fn test_1() {
         let mut kc = KlunkyServer::new(6666);
@@ -139,9 +147,7 @@ mod tests {
             for mut c in connections {
                 let make_request = c.request();
                 if let Ok(req) = make_request {
-                    println!("action: {}, params:{:?}", req.action, req.params);
-                    c.respond(KlunkyResponse{result:vec![format!("You sent: {}", req.action)], error: vec![]}).unwrap();
-
+                    c.respond(handle_request(&req)).unwrap();
                 } else {
                     c.respond(KlunkyResponse{result:vec![], error: vec![format!("{:?}", make_request)]}).unwrap();
                 }            
