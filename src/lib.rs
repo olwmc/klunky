@@ -1,15 +1,17 @@
 use std::net::{TcpListener, TcpStream, Shutdown};
 use std::sync::{Arc, Mutex};
-use std::io::{Write, Read};
-use std::{thread, time};
+use std::io::{Write, Read, BufReader, BufRead};
+use std::{thread, time, error};
 
-#[derive(Debug)]
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct KlunkyResponse {
     pub result: Vec<String>,
     pub error: Vec<String>
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct KlunkyRequest {
     pub action: String,
     pub params: Vec<String>
@@ -22,26 +24,55 @@ pub struct KlunkyConnection {
 #[derive(Debug)]
 pub enum KlunkyError {
     MalformedInput,
+    NotPost,
 }
 
 impl KlunkyConnection {
-    pub fn request(&mut self) -> Result<KlunkyRequest, KlunkyError> {
-        //let mut content_length = -1;
-        //println!("buf = {buf:?}");
+    pub fn request(&mut self) -> Result<KlunkyRequest, Box<dyn error::Error>> {
+        let mut reader = BufReader::new(self.connection.try_clone()?);
+        let mut name = String::new();
+        loop {
+        let r = reader.read_line(&mut name)?;
+            if r < 3 { //detect empty line
+                break;
+            }
+        }
+        let mut size = 0;
+        let linesplit = name.split("\n");
+        for l in linesplit {
+            if l.starts_with("Content-Length") {
+                    let sizeplit = l.split(":");
+                    for s in sizeplit {
+                        if !(s.starts_with("Content-Length")) {
+                            size = s.trim().parse::<usize>()?; //Get Content-Length
+                    }
+                }
+            }
+        }
+        let mut buffer = vec![0; size]; //New Vector with size of Content   
+        reader.read_exact(&mut buffer)?; //Get the Body Content.        
+        let data = std::str::from_utf8(&buffer)?;
 
-        Ok(KlunkyRequest { action: "Abcde".to_string(), params: vec![] })
+        let deserialized: KlunkyRequest = serde_json::from_str(&data)?;
+        Ok(deserialized)
     }
 
     pub fn respond(&mut self, response: KlunkyResponse) -> Result<usize, std::io::Error> {
         let header = "HTTP/1.1 200 OK";
-        let message = format!("{:?}", response);
-        self.connection.write(format!("{header}\r\nContent-Length:{}\r\n\r\n{message}", message.len()).as_bytes())
+        let message = format!("{}", serde_json::to_string(&response).unwrap());
+
+        let res = self.connection.write(
+            format!("{header}\r\nContent-Length:{}\r\n\r\n{message}", message.len()).as_bytes());
+
+        self.connection.flush()?;
+
+        res
     }
 }
 
 impl Drop for KlunkyConnection {
     fn drop(&mut self) {
-        self.connection.shutdown(Shutdown::Both).unwrap();
+        self.connection.shutdown(Shutdown::Both).ok();
     }
 }
 
@@ -66,8 +97,6 @@ impl KlunkyServer {
         thread::spawn(move || {
             // Accept connections
             loop {
-                // can this deadlock? I don't think so because they're in different scopes and
-                // one would just wait for the other as either is guaranteed to get unlocked
                 if let Ok((socket, _)) = listener.accept() {
                     copy.clone().lock().unwrap().push( socket )
                 }
@@ -108,8 +137,14 @@ mod tests {
             let connections = kc.consume_connections().into_iter();
 
             for mut c in connections {
-                println!("Request body = {:?}", c.request().unwrap());
-                c.respond(KlunkyResponse{result:vec!["Ok".to_string()], error: vec![]}).ok();
+                let make_request = c.request();
+                if let Ok(req) = make_request {
+                    println!("action: {}, params:{:?}", req.action, req.params);
+                    c.respond(KlunkyResponse{result:vec![], error: vec![]}).unwrap();
+
+                } else {
+                    c.respond(KlunkyResponse{result:vec![], error: vec![format!("{:?}", make_request)]}).unwrap();
+                }            
             }
         }
     }
