@@ -3,17 +3,29 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::io::Write;
 
-struct KlunkyResponse {
-    result: Vec<String>,
-    error: Vec<String>
+pub struct KlunkyResponse {
+    pub result: Vec<String>,
+    pub error: Vec<String>
 
 }
-struct KlunkyRequest {
-    action: String,
-    params: Vec<String>
+#[derive(Debug)]
+pub struct KlunkyRequest {
+    pub action: String,
+    pub params: Vec<String>
 }
+
 pub struct KlunkyConnection {
-    connection: TcpStream
+    pub connection: TcpStream,
+}
+
+impl KlunkyConnection {
+    fn request(&self) -> KlunkyRequest {
+        KlunkyRequest { action: "Abcde".to_string(), params: vec![] }
+    }
+
+    fn send_response(&mut self) -> Result<usize, std::io::Error> {
+        self.connection.write("HTTP/1.1 200 OK\r\n".as_bytes())
+    }
 }
 
 impl Drop for KlunkyConnection {
@@ -82,15 +94,14 @@ mod tests {
         kc.spawn();
 
         loop {
+            // Do some program work
             thread::sleep(time::Duration::from_millis(500));
+            let connections = kc.consume_connections().into_iter();
 
-            for mut c in kc.consume_connections().into_iter() {
-                let buf = "HTTP/1.1 200 OK\r\n".as_bytes();
-                c.connection.write(&buf).unwrap();
+            for mut c in connections {
+                println!("Request body = {:?}", c.request());
+                c.send_response().ok();
             }
-
-            println!("#connections = {}", kc.consume_connections().len());
-
         }
     }
 }
