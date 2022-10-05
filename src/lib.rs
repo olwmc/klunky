@@ -16,6 +16,12 @@ pub struct KlunkyConnection {
     connection: TcpStream
 }
 
+impl Drop for KlunkyConnection {
+    fn drop(&mut self) {
+        self.connection.shutdown(Shutdown::Both).unwrap();
+    }
+}
+
 /* Need to abstract and wrap stuff in a KlunkyRequest(inside tcp stream) and a KlunkyConnection(tcpstream itself) */
 /* I may need to impl iterator for this to preserve scope and stuff */
 pub struct KlunkyServer {    
@@ -78,11 +84,9 @@ mod tests {
         loop {
             thread::sleep(time::Duration::from_millis(500));
 
-            for mut c in kc.consume_connections() {
+            for mut c in kc.consume_connections().into_iter() {
                 let buf = "HTTP/1.1 200 OK\r\n".as_bytes();
                 c.connection.write(&buf).unwrap();
-
-                c.connection.shutdown(Shutdown::Both).unwrap();
             }
 
             println!("#connections = {}", kc.consume_connections().len());
